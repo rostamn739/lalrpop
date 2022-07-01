@@ -14,7 +14,6 @@ regex = { version = "1", optional = true }
 [features]
 lexer = ["regex"]
 std = []
-feedback-lexer = []
 default = ["std"]
 
 [package.metadata.docs.rs]

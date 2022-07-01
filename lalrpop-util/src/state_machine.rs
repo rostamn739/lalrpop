@@ -182,7 +182,6 @@ pub type TokenTriple<D> = (Location<D>, Token<D>, Location<D>);
 pub type SymbolTriple<D> = (Location<D>, Symbol<D>, Location<D>);
 pub type ErrorRecovery<D> = crate::ErrorRecovery<Location<D>, Token<D>, Error<D>>;
 
-#[cfg(feature = "feedback-lexer")]
 pub trait ParserFeedback<D, E>: Iterator<Item = Result<TokenTriple<D>, E>> + Sized
 where
     D: ParserDefinition,
@@ -223,6 +222,10 @@ where
     P: ParserFeedback<D, E1>,
     D: ParserDefinition,
 {
+    fn next_for(&mut self, expected: &[String]) -> Option<<Self as Iterator>::Item> {
+        let val = self.previous.next_for(expected);
+        val.map(|item| item.map_err(|e| (self.f)(e)))
+    }
 }
 
 pub struct MapParserFeedback<'a, F, E1, E2, P, D>
@@ -360,7 +363,6 @@ where
     }
 }
 
-#[cfg(not(feature = "feedback-lexer"))]
 impl<D, I> Parser<D, I>
 where
     D: ParserDefinition,
@@ -689,13 +691,12 @@ where
     }
 }
 
-#[cfg(feature = "feedback-lexer")]
 impl<D, I> Parser<D, I>
 where
     D: ParserDefinition,
     I: ParserFeedback<D, ParseError<D>>,
 {
-    pub fn drive(definition: D, tokens: I) -> ParseResult<D> {
+    pub fn drive_with_feedback(definition: D, tokens: I) -> ParseResult<D> {
         let last_location = definition.start_location();
         let start_state = definition.start_state();
         Parser {
@@ -705,11 +706,11 @@ where
             symbols: vec![],
             last_location,
         }
-        .parse()
+        .parse_with_feedback()
     }
 
     /// Invoked when we have no more tokens to consume.
-    fn parse_eof(&mut self) -> ParseResult<D> {
+    fn parse_eof_with_feedback(&mut self) -> ParseResult<D> {
         loop {
             let top_state = self.top_state();
             let action = self.definition.eof_action(top_state);
@@ -721,7 +722,7 @@ where
                     return result;
                 }
             } else {
-                match self.error_recovery(None, None) {
+                match self.error_recovery_with_feedback(None, None) {
                     NextToken::FoundToken(..) => panic!("cannot find token at EOF"),
                     NextToken::Done(e) => return e,
                     NextToken::EOF => continue,
@@ -730,15 +731,15 @@ where
         }
     }
 
-    fn parse(&mut self) -> ParseResult<D> {
+    fn parse_with_feedback(&mut self) -> ParseResult<D> {
         // Outer loop: each time we continue around this loop, we
         // shift a new token from the input. We break from the loop
         // when the end of the input is reached (we return early if an
         // error occurs).
         'shift: loop {
-            let (mut lookahead, mut token_index) = match self.next_token() {
+            let (mut lookahead, mut token_index) = match self.next_token_with_feedback() {
                 NextToken::FoundToken(l, i) => (l, i),
-                NextToken::EOF => return self.parse_eof(),
+                NextToken::EOF => return self.parse_eof_with_feedback(),
                 NextToken::Done(e) => return e,
             };
 
@@ -772,13 +773,13 @@ where
                 } else {
                     debug!("\\ error -- initiating error recovery!");
 
-                    match self.error_recovery(Some(lookahead), Some(token_index)) {
+                    match self.error_recovery_with_feedback(Some(lookahead), Some(token_index)) {
                         NextToken::FoundToken(l, i) => {
                             lookahead = l;
                             token_index = i;
                             continue 'inner;
                         }
-                        NextToken::EOF => return self.parse_eof(),
+                        NextToken::EOF => return self.parse_eof_with_feedback(),
                         NextToken::Done(e) => return e,
                     }
                 }
@@ -786,7 +787,7 @@ where
         }
     }
 
-    fn error_recovery(
+    fn error_recovery_with_feedback(
         &mut self,
         mut opt_lookahead: Option<TokenTriple<D>>,
         mut opt_token_index: Option<D::TokenIndex>,
@@ -880,7 +881,7 @@ where
                     debug!("\\\\\\ dropping lookahead token");
 
                     dropped_tokens.push(lookahead);
-                    match self.next_token() {
+                    match self.next_token_with_feedback() {
                         NextToken::FoundToken(next_lookahead, next_token_index) => {
                             opt_lookahead = Some(next_lookahead);
                             opt_token_index = Some(next_token_index);
@@ -993,7 +994,7 @@ where
         }
     }
 
-    fn next_token(&mut self) -> NextToken<D> {
+    fn next_token_with_feedback(&mut self) -> NextToken<D> {
         let token = match self
             .tokens
             .next_for(&self.definition.expected_tokens(self.top_state()))
