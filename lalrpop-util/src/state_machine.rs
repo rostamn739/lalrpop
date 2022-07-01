@@ -183,7 +183,7 @@ pub type SymbolTriple<D> = (Location<D>, Symbol<D>, Location<D>);
 pub type ErrorRecovery<D> = crate::ErrorRecovery<Location<D>, Token<D>, Error<D>>;
 
 #[cfg(feature = "feedback-lexer")]
-pub trait ParserFeedback<D>: Iterator<Item = Result<TokenTriple<D>, ParseError<D>>>
+pub trait ParserFeedback<D, E>: Iterator<Item = Result<TokenTriple<D>, E>>
 where
     D: ParserDefinition,
 {
@@ -649,7 +649,7 @@ where
 impl<D, I> Parser<D, I>
 where
     D: ParserDefinition,
-    I: ParserFeedback<D>,
+    I: ParserFeedback<D, ParseError<D>>,
 {
     pub fn drive(definition: D, tokens: I) -> ParseResult<D> {
         let last_location = definition.start_location();
