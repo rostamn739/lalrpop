@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use alloc::{string::String, vec, vec::Vec};
-use core::fmt::Debug;
+use core::{fmt::Debug, marker};
 
 const DEBUG_ENABLED: bool = false;
 
@@ -183,13 +183,57 @@ pub type SymbolTriple<D> = (Location<D>, Symbol<D>, Location<D>);
 pub type ErrorRecovery<D> = crate::ErrorRecovery<Location<D>, Token<D>, Error<D>>;
 
 #[cfg(feature = "feedback-lexer")]
-pub trait ParserFeedback<D, E>: Iterator<Item = Result<TokenTriple<D>, E>>
+pub trait ParserFeedback<D, E>: Iterator<Item = Result<TokenTriple<D>, E>> + Sized
 where
     D: ParserDefinition,
 {
     fn next_for(&mut self, _expected: &[String]) -> Option<<Self as Iterator>::Item> {
         self.next()
     }
+
+    fn map<F, E2>(&mut self, f: F) -> MapParserFeedback<F, E, E2, Self, D>
+    where
+        F: Fn(E) -> E2,
+    {
+        MapParserFeedback {
+            f,
+            previous: self,
+            _pd1: Default::default(),
+        }
+    }
+}
+
+impl<'a, F, E1, E2, P, D> Iterator for MapParserFeedback<'a, F, E1, E2, P, D>
+where
+    F: Fn(E1) -> E2,
+    P: ParserFeedback<D, E1>,
+    D: ParserDefinition,
+{
+    type Item = Result<TokenTriple<D>, E2>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let val = self.previous.next();
+        val.map(|item| item.map_err(|e| (self.f)(e)))
+    }
+}
+
+impl<'a, F, E1, E2, P, D> ParserFeedback<D, E2> for MapParserFeedback<'a, F, E1, E2, P, D>
+where
+    F: Fn(E1) -> E2,
+    P: ParserFeedback<D, E1>,
+    D: ParserDefinition,
+{
+}
+
+pub struct MapParserFeedback<'a, F, E1, E2, P, D>
+where
+    F: Fn(E1) -> E2,
+    P: ParserFeedback<D, E1>,
+    D: ParserDefinition,
+{
+    f: F,
+    previous: &'a mut P,
+    _pd1: marker::PhantomData<(E1, E2, D)>,
 }
 
 pub struct Parser<D, I>
