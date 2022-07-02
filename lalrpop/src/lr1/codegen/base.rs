@@ -220,11 +220,13 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
             }
             type_parameters = vec![
                 format!(
-                    "{}TOKENS: lalrpop_util::state_machine::ParserFeedback<D, E>",
-                    self.prefix,
+                    "{}TOKEN: {}ToTriple<{}>",
+                    self.prefix, self.prefix, user_type_parameters,
                 ),
-                "D: lalrpop_util::state_machine::ParserDefinition".to_owned(),
-                "E".to_owned(),
+                format!(
+                    "{}TOKENS: IntoIterator<Item={}TOKEN>",
+                    self.prefix, self.prefix
+                ),
             ];
             parameters = vec![format!("{}tokens0: {}TOKENS", self.prefix, self.prefix)];
             where_clauses = vec![];
@@ -312,7 +314,7 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
             let clone_call = if self.repeatable { ".clone()" } else { "" };
             rust!(
                 self.out,
-                "let {}tokens = {}tokens0{};",
+                "let {}tokens = {}tokens0{}.into_iter();",
                 self.prefix,
                 self.prefix,
                 clone_call

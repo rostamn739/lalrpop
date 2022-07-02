@@ -11,6 +11,7 @@ use std::error::Error;
 pub mod lexer;
 pub mod state_machine;
 
+#[cfg(feature = "feedback-lexer")]
 pub use state_machine::ParserFeedback;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
