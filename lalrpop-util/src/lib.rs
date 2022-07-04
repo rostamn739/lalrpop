@@ -12,7 +12,7 @@ pub mod lexer;
 pub mod state_machine;
 
 #[cfg(feature = "feedback-lexer")]
-pub use state_machine::ParserFeedback;
+pub use state_machine::TokensWithFeedback;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParseError<L, T, E> {
