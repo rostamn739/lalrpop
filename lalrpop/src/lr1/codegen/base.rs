@@ -221,6 +221,7 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
         if self.repeatable {
             where_clauses.push(format!("{}TOKENS: Clone", self.prefix));
         }
+        rust!(self.out, "impl {}Parser {{", self.user_start_symbol);
         rust!(self.out, "");
 
         rust!(self.out, "#[allow(dead_code)]");
@@ -409,6 +410,7 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
 
     pub fn end_parser_with_feedback_fn(&mut self) -> io::Result<()> {
         rust!(self.out, "}}"); // fn
+        rust!(self.out, "}}"); // impl
         Ok(())
     }
 
