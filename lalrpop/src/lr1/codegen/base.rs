@@ -207,9 +207,10 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
         for type_parameter in &self.grammar.type_parameters {
             user_type_parameters.push_str(&format!("{}, ", type_parameter));
         }
-        type_parameters = vec![format!(
-            "{}TOKENS: lalrpop_util::state_machine::ParserFeedback<D, E>",
-            self.prefix,
+        type_parameters = vec![
+            format!(
+                "{}TOKENS: lalrpop_util::state_machine::ParserFeedback<D, E>",
+                self.prefix,
             ),
             "D: lalrpop_util::state_machine::ParserDefinition".to_owned(),
             "E: std::error::Error".to_owned(),
@@ -358,11 +359,8 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
             self.out,
             r#"
             let mut {}tokens =
-                lalrpop_util::state_machine::ParserFeedback::map(&mut {}tokens, |t| {{
-                match t {{
-                    Ok(t) => Ok(t),
-                    Err(error) => Err(lalrpop_util::ParseError::User {{ error }}),
-                }}
+                lalrpop_util::state_machine::ParserFeedback::map(&mut {}tokens, |error| {{
+                    lalrpop_util::ParseError::User {{ error }}
             }});"#,
             self.prefix,
             self.prefix,
