@@ -199,6 +199,48 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
         Ok(())
     }
 
+    pub fn start_parser_with_feedback_fn(&mut self) -> io::Result<()> {
+        let parse_error_type = self.types.parse_error_type();
+        let (type_parameters, parameters, mut where_clauses);
+
+        let mut user_type_parameters = String::new();
+        for type_parameter in &self.grammar.type_parameters {
+            user_type_parameters.push_str(&format!("{}, ", type_parameter));
+        }
+        type_parameters = vec![format!(
+            "{}TOKENS: lalrpop_utils::state_machine::ParserFeedback<D, E>",
+            self.prefix,
+        )];
+        parameters = vec![format!("{}tokens0: {}TOKENS", self.prefix, self.prefix)];
+        where_clauses = vec![];
+
+        if self.repeatable {
+            where_clauses.push(format!("{}TOKENS: Clone", self.prefix));
+        }
+        rust!(self.out, "");
+
+        rust!(self.out, "#[allow(dead_code)]");
+        self.out
+            .fn_header(
+                &self.grammar.nonterminals[&self.start_symbol].visibility,
+                "parse_with_feedback".to_owned(),
+            )
+            .with_parameters(Some("&self".to_owned()))
+            .with_grammar(self.grammar)
+            .with_type_parameters(type_parameters)
+            .with_parameters(parameters)
+            .with_return_type(format!(
+                "Result<{}, {}>",
+                self.types.nonterminal_type(&self.start_symbol),
+                parse_error_type
+            ))
+            .with_where_clauses(where_clauses)
+            .emit()?;
+        rust!(self.out, "{{");
+
+        Ok(())
+    }
+
     pub fn start_parser_fn(&mut self) -> io::Result<()> {
         let parse_error_type = self.types.parse_error_type();
 

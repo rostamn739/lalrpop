@@ -150,6 +150,7 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
             this.write_token_to_symbol_fn()?;
             this.write_simulate_reduce_fn()?;
             this.write_parser_fn()?;
+            this.write_parser_with_Feedback_fn()?;
             this.write_accepts_fn()?;
             this.emit_reduce_actions()?;
             this.emit_downcast_fns()?;
@@ -683,6 +684,39 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
             // Otherwise, this is an error. Store 0.
             (0, Comment::Error(token.clone()))
         }
+    }
+
+    fn write_parser_with_Feedback_fn(&mut self) -> io::Result<()> {
+        if self.grammar.intern_token.is_some() {
+            return Ok(());
+        }
+
+        let phantom_data_expr = self.phantom_data_expr();
+
+        self.start_parser_with_feedback_fn()?;
+
+        self.define_tokens()?;
+
+        rust!(
+            self.out,
+            "{p}state_machine::Parser::drive_with_feedback(",
+            p = self.prefix,
+        );
+        rust!(self.out, "{p}StateMachine {{", p = self.prefix);
+        for Parameter { name, .. } in &self.grammar.parameters {
+            rust!(self.out, "{},", name);
+        }
+        rust!(
+            self.out,
+            "{p}phantom: {phantom},",
+            p = self.prefix,
+            phantom = phantom_data_expr,
+        );
+        rust!(self.out, "}},");
+        rust!(self.out, "{p}tokens,", p = self.prefix);
+        rust!(self.out, ")");
+
+        self.end_parser_fn()
     }
 
     fn write_parser_fn(&mut self) -> io::Result<()> {
@@ -1553,7 +1587,10 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
         rust!(self.out, "if next_state == 0 {{");
         rust!(self.out, "None");
         rust!(self.out, "}} else {{");
-        rust!(self.out, "Some(alloc::string::ToString::to_string(terminal))");
+        rust!(
+            self.out,
+            "Some(alloc::string::ToString::to_string(terminal))"
+        );
         rust!(self.out, "}}");
         rust!(self.out, "}}).collect()");
         rust!(self.out, "}}");
