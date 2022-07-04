@@ -150,7 +150,7 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
             this.write_token_to_symbol_fn()?;
             this.write_simulate_reduce_fn()?;
             this.write_parser_fn()?;
-            this.write_parser_with_Feedback_fn()?;
+            this.write_parser_with_feedback_fn()?;
             this.write_accepts_fn()?;
             this.emit_reduce_actions()?;
             this.emit_downcast_fns()?;
@@ -686,7 +686,7 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
         }
     }
 
-    fn write_parser_with_Feedback_fn(&mut self) -> io::Result<()> {
+    fn write_parser_with_feedback_fn(&mut self) -> io::Result<()> {
         if self.grammar.intern_token.is_some() {
             return Ok(());
         }
@@ -695,7 +695,7 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
 
         self.start_parser_with_feedback_fn()?;
 
-        self.define_tokens()?;
+        self.define_tokens_with_feedback()?;
 
         rust!(
             self.out,
@@ -716,7 +716,7 @@ impl<'ascent, 'grammar, W: Write> CodeGenerator<'ascent, 'grammar, W, TableDrive
         rust!(self.out, "{p}tokens,", p = self.prefix);
         rust!(self.out, ")");
 
-        self.end_parser_fn()
+        self.end_parser_with_feedback_fn()
     }
 
     fn write_parser_fn(&mut self) -> io::Result<()> {

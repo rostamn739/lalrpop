@@ -101,14 +101,14 @@ impl<'me, W: Write> RustWrite<W> {
 
         // If the line begins with a `}`, `]`, or `)`, first decrement the indentation.
         if buf[0] == b'}' || buf[0] == b']' || buf[0] == b')' {
-            self.indent -= TAB;
+            self.indent = self.indent.saturating_sub(TAB);
         }
 
         self.write_indented(out)?;
 
         // Detect a line that ends in a `{` or `(` and increase indentation for future lines.
         if buf[n] == b'{' || buf[n] == b'[' || buf[n] == b'(' {
-            self.indent += TAB;
+            self.indent = self.indent.saturating_add(TAB);
         }
 
         Ok(())

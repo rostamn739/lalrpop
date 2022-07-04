@@ -208,9 +208,12 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
             user_type_parameters.push_str(&format!("{}, ", type_parameter));
         }
         type_parameters = vec![format!(
-            "{}TOKENS: lalrpop_utils::state_machine::ParserFeedback<D, E>",
+            "{}TOKENS: lalrpop_util::state_machine::ParserFeedback<D, E>",
             self.prefix,
-        )];
+            ),
+            "D: lalrpop_util::state_machine::ParserDefinition".to_owned(),
+            "E: std::error::Error".to_owned(),
+        ];
         parameters = vec![format!("{}tokens0: {}TOKENS", self.prefix, self.prefix)];
         where_clauses = vec![];
 
@@ -341,6 +344,32 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
         Ok(())
     }
 
+    pub fn define_tokens_with_feedback(&mut self) -> io::Result<()> {
+        let clone_call = if self.repeatable { ".clone()" } else { "" };
+        rust!(
+            self.out,
+            "let mut {}tokens = {}tokens0{};",
+            self.prefix,
+            self.prefix,
+            clone_call
+        );
+
+        rust!(
+            self.out,
+            r#"
+            let mut {}tokens =
+                lalrpop_util::state_machine::ParserFeedback::map(&mut {}tokens, |t| {{
+                match t {{
+                    Ok(t) => Ok(t),
+                    Err(error) => Err(lalrpop_util::ParseError::User {{ error }}),
+                }}
+            }});"#,
+            self.prefix,
+            self.prefix,
+        );
+        Ok(())
+    }
+
     pub fn define_tokens(&mut self) -> io::Result<()> {
         if self.grammar.intern_token.is_some() {
             // if we are generating the tokenizer, create a matcher as our input iterator
@@ -377,6 +406,11 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
     pub fn end_parser_fn(&mut self) -> io::Result<()> {
         rust!(self.out, "}}"); // fn
         rust!(self.out, "}}"); // impl
+        Ok(())
+    }
+
+    pub fn end_parser_with_feedback_fn(&mut self) -> io::Result<()> {
+        rust!(self.out, "}}"); // fn
         Ok(())
     }
 
