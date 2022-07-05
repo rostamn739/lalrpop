@@ -182,61 +182,61 @@ pub type TokenTriple<D> = (Location<D>, Token<D>, Location<D>);
 pub type SymbolTriple<D> = (Location<D>, Symbol<D>, Location<D>);
 pub type ErrorRecovery<D> = crate::ErrorRecovery<Location<D>, Token<D>, Error<D>>;
 
-pub trait ParserFeedback<D, E>: Iterator<Item = Result<TokenTriple<D>, E>> + Sized
-where
-    D: ParserDefinition,
-{
-    fn next_for(&mut self, _expected: &[String]) -> Option<<Self as Iterator>::Item> {
-        self.next()
-    }
+pub trait TokensWithFeedback {
+    type Item;
 
-    fn map<F, E2>(&mut self, f: F) -> MapParserFeedback<F, E, E2, Self, D>
+    fn next(&mut self, expected_tokens: &[String]) -> Option<Self::Item>;
+
+    fn map<New, F>(self, f: F) -> TokensWithFeedbackMap<Self, F>
     where
-        F: Fn(E) -> E2,
+        Self: Sized,
+        F: FnMut(Self::Item) -> New,
     {
-        MapParserFeedback {
-            f,
-            previous: self,
-            _pd1: Default::default(),
-        }
+        TokensWithFeedbackMap { original: self, f }
     }
 }
 
-impl<'a, F, E1, E2, P, D> Iterator for MapParserFeedback<'a, F, E1, E2, P, D>
-where
-    F: Fn(E1) -> E2,
-    P: ParserFeedback<D, E1>,
-    D: ParserDefinition,
-{
-    type Item = Result<TokenTriple<D>, E2>;
+impl<T: Iterator> TokensWithFeedback for T {
+    type Item = T::Item;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let val = self.previous.next();
-        val.map(|item| item.map_err(|e| (self.f)(e)))
+    fn next(&mut self, _expected_tokens: &[String]) -> Option<Self::Item> {
+        <T as Iterator>::next(self)
     }
 }
 
-impl<'a, F, E1, E2, P, D> ParserFeedback<D, E2> for MapParserFeedback<'a, F, E1, E2, P, D>
-where
-    F: Fn(E1) -> E2,
-    P: ParserFeedback<D, E1>,
-    D: ParserDefinition,
-{
-    fn next_for(&mut self, expected: &[String]) -> Option<<Self as Iterator>::Item> {
-        let val = self.previous.next_for(expected);
-        val.map(|item| item.map_err(|e| (self.f)(e)))
-    }
-}
-
-pub struct MapParserFeedback<'a, F, E1, E2, P, D>
-where
-    F: Fn(E1) -> E2,
-    P: ParserFeedback<D, E1>,
-    D: ParserDefinition,
-{
+pub struct TokensWithFeedbackMap<T, F> {
+    original: T,
     f: F,
-    previous: &'a mut P,
-    _pd1: marker::PhantomData<(E1, E2, D)>,
+}
+
+impl<T, New, F> TokensWithFeedback for TokensWithFeedbackMap<T, F>
+where
+    T: TokensWithFeedback,
+    F: FnMut(T::Item) -> New,
+{
+    type Item = New;
+
+    fn next(&mut self, expected_tokens: &[String]) -> Option<Self::Item> {
+        let item = self.original.next(expected_tokens)?;
+        Some((self.f)(item))
+    }
+}
+
+pub trait IntoTokensWithFeedback {
+    type Item;
+    type IntoTokens: TokensWithFeedback<Item = Self::Item>;
+
+    fn into_tokens(self) -> Self::IntoTokens;
+}
+
+impl<T: IntoIterator> IntoTokensWithFeedback for T {
+    type Item = T::Item;
+
+    type IntoTokens = T::IntoIter;
+
+    fn into_tokens(self) -> Self::IntoTokens {
+        self.into_iter()
+    }
 }
 
 pub struct Parser<D, I>
@@ -694,7 +694,7 @@ where
 impl<D, I> Parser<D, I>
 where
     D: ParserDefinition,
-    I: ParserFeedback<D, ParseError<D>>,
+    I: TokensWithFeedback<Item = Result<TokenTriple<D>, ParseError<D>>>,
 {
     pub fn drive_with_feedback(definition: D, tokens: I) -> ParseResult<D> {
         let last_location = definition.start_location();
@@ -997,7 +997,7 @@ where
     fn next_token_with_feedback(&mut self) -> NextToken<D> {
         let token = match self
             .tokens
-            .next_for(&self.definition.expected_tokens(self.top_state()))
+            .next(&self.definition.expected_tokens(self.top_state()))
         {
             Some(Ok(v)) => v,
             Some(Err(e)) => return NextToken::Done(Err(e)),

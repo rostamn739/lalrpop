@@ -209,11 +209,13 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
         }
         type_parameters = vec![
             format!(
-                "{}TOKENS: lalrpop_util::state_machine::ParserFeedback<D, E>",
-                self.prefix,
+                "{}TOKEN: {}ToTriple<{}>",
+                self.prefix, self.prefix, user_type_parameters,
             ),
-            "D: lalrpop_util::state_machine::ParserDefinition".to_owned(),
-            "E: std::error::Error".to_owned(),
+            format!(
+                "{}TOKENS: __state_machine::IntoTokensWithFeedback<Item={}TOKEN>",
+                self.prefix, self.prefix
+            ),
         ];
         parameters = vec![format!("{}tokens0: {}TOKENS", self.prefix, self.prefix)];
         where_clauses = vec![];
@@ -347,25 +349,32 @@ impl<'codegen, 'grammar, W: Write, C> CodeGenerator<'codegen, 'grammar, W, C> {
     }
 
     pub fn define_tokens_with_feedback(&mut self) -> io::Result<()> {
-        let clone_call = if self.repeatable { ".clone()" } else { "" };
-        rust!(
-            self.out,
-            "let mut {}tokens = {}tokens0{};",
-            self.prefix,
-            self.prefix,
-            clone_call
-        );
+        if self.grammar.intern_token.is_some() {
+            // if we are generating the tokenizer, create a matcher as our input iterator
+            rust!(
+                self.out,
+                "let mut {}tokens = self.builder.matcher(input);",
+                self.prefix
+            );
+        } else {
+            let clone_call = if self.repeatable { ".clone()" } else { "" };
+            rust!(
+                self.out,
+                "let mut {}tokens = {}tokens0{}.into_tokens();",
+                self.prefix,
+                self.prefix,
+                clone_call
+            );
 
-        rust!(
+            rust!(
             self.out,
-            r#"
-            let mut {}tokens =
-                lalrpop_util::state_machine::ParserFeedback::map(&mut {}tokens, |error| {{
-                    lalrpop_util::ParseError::User {{ error }}
-            }});"#,
+            "let mut {}tokens = __state_machine::TokensWithFeedback::map({}tokens, |t| {}ToTriple::to_triple(t));",
             self.prefix,
             self.prefix,
+            self.prefix
         );
+        }
+
         Ok(())
     }
 
